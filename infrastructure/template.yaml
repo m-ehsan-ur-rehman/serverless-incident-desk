@@ -1,0 +1,98 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless Incident Desk Infrastructure
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 128
+
+Resources:
+
+  IncidentTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: incident_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: incident_id
+          KeyType: HASH
+
+  IncidentApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PATCH
+        AllowHeaders:
+          - content-type
+
+  CreateIncidentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/
+      Handler: functions.create_incident.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref IncidentTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref IncidentTable
+      Events:
+        CreateIncident:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref IncidentApi
+            Path: /incidents
+            Method: POST
+
+  GetIncidentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/
+      Handler: functions.get_incidents.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref IncidentTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref IncidentTable
+      Events:
+        GetIncidents:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref IncidentApi
+            Path: /incidents
+            Method: GET
+
+  UpdateIncidentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/
+      Handler: functions.update_incident.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref IncidentTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref IncidentTable
+      Events:
+        UpdateIncident:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref IncidentApi
+            Path: /incidents/{incident_id}
+            Method: PATCH
+
+Outputs:
+  ApiEndpoint:
+    Description: Incident API endpoint
+    Value: !Sub "https://${IncidentApi}.execute-api.${AWS::Region}.amazonaws.com"
